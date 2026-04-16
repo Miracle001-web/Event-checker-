@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Check-In App — Dark</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161b27;
+    --bg3: #1e2535;
+    --bg4: #252d3f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #f0f2f8;
+    --text2: #8b92a5;
+    --text3: #5a6175;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --accent-bg: rgba(99,102,241,0.12);
+    --success: #22c55e;
+    --success-bg: rgba(34,197,94,0.1);
+    --danger: #ef4444;
+    --danger-bg: rgba(239,68,68,0.1);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245,158,11,0.1);
+    --info: #38bdf8;
+    --info-bg: rgba(56,189,248,0.1);
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+  /* NAV */
+  .nav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-brand { font-size: 16px; font-weight: 700; letter-spacing: 0.01em; display: flex; align-items: center; gap: 10px; }
+  .nav-brand-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .nav-badge { background: var(--accent-bg); color: var(--accent2); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(99,102,241,0.3); }
+  .nav-right { display: flex; align-items: center; gap: 10px; }
+  .nav-admin { font-size: 13px; color: var(--text2); }
+  .nav-btn { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 14px; border-radius: var(--radius); cursor: pointer; font-size: 13px; transition: background 0.15s; }
+  .nav-btn:hover { background: var(--bg4); }
+
+  /* TABS */
+  .tab-bar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 0; }
+  .tab { padding: 14px 18px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; white-space: nowrap; }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+  /* LAYOUT */
+  .page { display: none; padding: 24px; max-width: 1100px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 24px; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 16px; letter-spacing: 0.01em; }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; position: relative; overflow: hidden; }
+  .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background: var(--accent); }
+  .stat-card.success::before { background: var(--success); }
+  .stat-card.danger::before { background: var(--danger); }
+  .stat-card.warning::before { background: var(--warning); }
+  .stat-card.info::before { background: var(--info); }
+  .stat-label { font-size: 11px; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-value { font-size: 32px; font-weight: 700; color: var(--text); line-height: 1; }
+
+  /* FORMS */
+  .form-row { margin-bottom: 16px; }
+  .form-row label { display: block; font-size: 11px; font-weight: 600; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border2); border-radius: var(--radius); font-size: 14px; color: var(--text); background: var(--bg3); transition: border-color 0.15s, box-shadow 0.15s; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+  input::placeholder { color: var(--text3); }
+  select option { background: var(--bg3); }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; letter-spacing: 0.01em; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #5558e8; }
+  .btn-success { background: var(--success); color: #052e16; }
+  .btn-success:hover { background: #16a34a; color: white; }
+  .btn-outline { background: transparent; border: 1px solid var(--border2); color: var(--text2); }
+  .btn-outline:hover { background: var(--bg3); color: var(--text); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* SEARCH BAR */
+  .search-wrap { position: relative; }
+  .search-wrap input { padding-left: 36px; }
+  .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
+
+  /* RESULT CARD */
+  .result-card { border-radius: var(--radius-lg); padding: 20px 24px; margin-top: 20px; border: 1px solid; }
+  .result-card.allowed { background: var(--success-bg); border-color: rgba(34,197,94,0.3); }
+  .result-card.duplicate { background: var(--warning-bg); border-color: rgba(245,158,11,0.3); }
+  .result-card.not-found { background: var(--danger-bg); border-color: rgba(239,68,68,0.3); }
+  .result-card.already-in { background: var(--info-bg); border-color: rgba(56,189,248,0.3); }
+  .result-name { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .result-meta { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+  .result-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .status-allowed { background: var(--success-bg); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+  .status-duplicate { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+  .status-not-found { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+  .status-in { background: var(--info-bg); color: var(--info); border: 1px solid rgba(56,189,248,0.3); }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg3); color: var(--text3); font-weight: 600; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  td { padding: 12px 12px; border-bottom: 1px solid var(--border); color: var(--text2); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg3); color: var(--text); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .badge-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(34,197,94,0.2); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245,158,11,0.2); }
+  .badge-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+  .badge-info { background: var(--info-bg); color: var(--info); border: 1px solid rgba(56,189,248,0.2); }
+
+  /* LOGIN */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); position: relative; overflow: hidden; }
+  .login-glow { position: absolute; width: 500px; height: 500px; background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%); top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; }
+  .login-card { width: 100%; max-width: 400px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px; padding: 36px 32px; position: relative; z-index: 1; }
+  .login-logo { text-align: center; margin-bottom: 28px; }
+  .login-logo-icon { width: 52px; height: 52px; background: var(--accent); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .login-title { font-size: 22px; font-weight: 700; color: var(--text); }
+  .login-sub { font-size: 13px; color: var(--text3); margin-top: 4px; }
+
+  /* EVENT BANNER */
+  .event-banner { background: var(--accent-bg); border: 1px solid rgba(99,102,241,0.25); border-radius: var(--radius-lg); padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .event-banner-info { font-size: 13px; color: var(--accent2); }
+  .event-banner-info strong { font-weight: 700; font-size: 14px; }
+
+  /* CAMERA */
+  .camera-wrap { background: #000; border-radius: var(--radius-lg); overflow: hidden; position: relative; aspect-ratio: 4/3; max-width: 480px; margin: 0 auto; border: 1px solid var(--border); }
+  .camera-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .camera-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scan-box { width: 200px; height: 200px; border: 2px solid var(--accent2); border-radius: 16px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5), 0 0 20px rgba(99,102,241,0.4); }
+
+  /* MODAL */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(4px); }
+  .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px; padding: 28px 32px; width: 100%; max-width: 480px; }
+  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+  /* ALERT */
+  .alert { padding: 12px 16px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; }
+  .alert-error { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+  .alert-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+  .alert-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+
+  /* GRID HELPERS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .flex-gap { display: flex; gap: 10px; flex-wrap: wrap; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .mt-2 { margin-top: 8px; }
+  .mt-3 { margin-top: 12px; }
+  .mt-4 { margin-top: 16px; }
+  .mb-4 { margin-bottom: 16px; }
+  .text-muted { color: var(--text3); font-size: 13px; }
+  .text-center { text-align: center; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .hidden { display: none !important; }
+
+  /* SCANNER TABS */
+  .method-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+  .method-tab { flex: 1; padding: 10px; text-align: center; border: 1px solid var(--border2); border-radius: var(--radius); cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text3); background: var(--bg2); transition: all 0.15s; }
+  .method-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .method-tab:not(.active):hover { background: var(--bg3); color: var(--text2); }
+
+  /* SPINNER */
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* PILL TAG */
+  .pill { display: inline-flex; align-items: center; gap: 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--text2); }
+
+  /* RESPONSIVE */
+  @media (max-width: 640px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .tab { padding: 12px 12px; font-size: 12px; }
+    .page { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-glow"></div>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">
+        <svg width="26" height="26" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      </div>
+      <div class="login-title">Event Check-In</div>
+      <div class="login-sub">Secure gate access system</div>
+    </div>
+    <div id="loginError" class="alert alert-error hidden"></div>
+
+    <!-- Supabase Config (shown when not yet connected) -->
+    <div id="loginDbSection">
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">⚙ Supabase Connection</div>
+        <div id="loginDbStatus" style="font-size:12px;margin-bottom:8px;color:var(--warning);">Not connected — paste your credentials below</div>
+        <div class="form-row" style="margin-bottom:8px;">
+          <label>Project URL</label>
+          <input type="text" id="loginCfgUrl" placeholder="https://xxxx.supabase.co"/>
+        </div>
+        <div class="form-row" style="margin-bottom:10px;">
+          <label>Anon Public Key</label>
+          <input type="text" id="loginCfgKey" placeholder="eyJ..."/>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="saveLoginSupabaseConfig()" style="width:100%;justify-content:center;">Save & Connect</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>Email address</label>
+      <input type="email" id="loginEmail" placeholder="admin@example.com"/>
+    </div>
+    <div class="form-row">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="doLogin()">
+      <span id="loginBtnText">Sign in</span>
+    </button>
+    <div id="loginSupabaseStatus" style="text-align:center;margin-top:14px;font-size:12px;color:var(--text3);"></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+    <p style="text-align:center;font-size:12px;color:var(--text3);">Wrong database? <button onclick="clearSupabaseConfig()" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:12px;text-decoration:underline;">Reset Supabase config</button></p>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" class="hidden">
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-brand-icon">
+        <svg width="16" height="16" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      </div>
+      Check-In System
+      <span class="nav-badge" id="navEventLabel">No event</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-admin" id="navAdminName">—</span>
+      <button class="nav-btn" onclick="showModal('profileModal')">Profile</button>
+      <button class="nav-btn" onclick="doLogout()">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="tab-bar">
+    <div class="tab active" onclick="showTab('tabCheckin','tabBtnCheckin')" id="tabBtnCheckin">Check-In</div>
+    <div class="tab" onclick="showTab('tabDashboard','tabBtnDashboard')" id="tabBtnDashboard">Dashboard</div>
+    <div class="tab" onclick="showTab('tabLog','tabBtnLog')" id="tabBtnLog">Attendance Log</div>
+    <div class="tab" onclick="showTab('tabEvent','tabBtnEvent')" id="tabBtnEvent">Event Settings</div>
+    <div class="tab" onclick="showTab('tabAdmin','tabBtnAdmin')" id="tabBtnAdmin">Admin Config</div>
+  </div>
+
+  <!-- CHECK-IN TAB -->
+  <div class="page active" id="tabCheckin">
+    <div id="eventWarningBanner" class="alert alert-warning hidden">No active event set. Configure in Event Settings before checking in anyone.</div>
+    <div id="eventBanner" class="event-banner hidden">
+      <div class="event-banner-info">
+        <strong id="bannerEventKind">—</strong> &nbsp;·&nbsp; <span id="bannerEventDate">—</span> &nbsp;·&nbsp; Session: <strong id="bannerSession">—</strong>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="showTab('tabEvent','tabBtnEvent')">Change</button>
+    </div>
+
+    <div class="method-tabs">
+      <div class="method-tab active" onclick="switchMethod('qr',this)">QR Scan</div>
+      <div class="method-tab" onclick="switchMethod('manual',this)">Manual ID</div>
+      <div class="method-tab" onclick="switchMethod('search',this)">Search</div>
+    </div>
+
+    <!-- QR -->
+    <div id="methodQR" class="card">
+      <div class="card-title">Scan QR Code</div>
+      <div class="camera-wrap" id="cameraWrap">
+        <video id="qrVideo" autoplay playsinline muted></video>
+        <div class="camera-overlay"><div class="scan-box"></div></div>
+        <canvas id="qrCanvas" style="display:none;"></canvas>
+      </div>
+      <div class="flex-gap mt-4">
+        <button class="btn btn-primary" id="startCamBtn" onclick="startCamera()">Start Camera</button>
+        <button class="btn btn-outline" id="stopCamBtn" onclick="stopCamera()" style="display:none;">Stop</button>
+      </div>
+      <p id="scanStatus" class="text-muted mt-3">Camera not started.</p>
+    </div>
+
+    <!-- MANUAL -->
+    <div id="methodManual" class="card hidden">
+      <div class="card-title">Enter KingsChat Handle</div>
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <input type="text" id="manualHandle" placeholder="e.g. @johnsmith" onkeydown="if(event.key==='Enter')lookupHandle(document.getElementById('manualHandle').value)"/>
+      </div>
+      <button class="btn btn-primary mt-3" onclick="lookupHandle(document.getElementById('manualHandle').value)">Look Up</button>
+    </div>
+
+    <!-- SEARCH -->
+    <div id="methodSearch" class="card hidden">
+      <div class="card-title">Search Attendee</div>
+      <div class="grid-3 mb-4">
+        <div class="form-row" style="margin:0;"><label>Name</label><input type="text" id="searchName" placeholder="Full name"/></div>
+        <div class="form-row" style="margin:0;"><label>KingsChat Handle</label><input type="text" id="searchHandle" placeholder="@handle"/></div>
+        <div class="form-row" style="margin:0;"><label>Phone Number</label><input type="text" id="searchPhone" placeholder="Phone"/></div>
+      </div>
+      <button class="btn btn-primary" onclick="doSearch()">Search</button>
+      <div id="searchResults" class="mt-4"></div>
+    </div>
+
+    <!-- RESULT -->
+    <div id="checkinResult" class="hidden"></div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div class="page" id="tabDashboard">
+    <div class="flex-between mb-4">
+      <h2 style="font-size:18px;font-weight:700;">Live Dashboard</h2>
+      <button class="btn btn-outline btn-sm" onclick="loadDashboard()">↻ Refresh</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Total Approved</div><div class="stat-value" id="statTotal">—</div></div>
+      <div class="stat-card success"><div class="stat-label">Checked In</div><div class="stat-value" id="statCheckedIn">—</div></div>
+      <div class="stat-card warning"><div class="stat-label">Remaining</div><div class="stat-value" id="statRemaining">—</div></div>
+      <div class="stat-card danger"><div class="stat-label">Rejected Scans</div><div class="stat-value" id="statRejected">—</div></div>
+      <div class="stat-card info"><div class="stat-label">Duplicates Blocked</div><div class="stat-value" id="statDuplicates">—</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Recent Check-Ins</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>KingsChat</th><th>Cell</th><th>Time</th><th>Method</th><th>Admin</th></tr></thead>
+          <tbody id="recentTable"><tr><td colspan="6" class="text-center text-muted" style="padding:24px;">No data yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div class="page" id="tabLog">
+    <div class="flex-between mb-4" style="flex-wrap:wrap;gap:12px;">
+      <h2 style="font-size:18px;font-weight:700;">Attendance Log</h2>
+      <div class="flex-gap">
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportExcel()">Excel</button>
+        <button class="btn btn-outline btn-sm" onclick="exportPDF()">PDF</button>
+        <button class="btn btn-outline btn-sm" onclick="loadLog()">↻</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex-gap mb-4">
+        <input type="text" id="logSearch" placeholder="Filter by name, handle, cell..." style="max-width:300px;" oninput="filterLog()"/>
+        <select id="logResultFilter" onchange="filterLog()" style="width:160px;">
+          <option value="">All results</option>
+          <option value="success">Success</option>
+          <option value="duplicate">Duplicate</option>
+          <option value="not_found">Not Found</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>KingsChat</th><th>Phone</th><th>Cell</th><th>Check-In Time</th><th>Method</th><th>Admin</th><th>Event</th><th>Session</th><th>Result</th></tr></thead>
+          <tbody id="logTable"><tr><td colspan="10" class="text-center text-muted" style="padding:24px;">No records</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENT SETTINGS TAB -->
+  <div class="page" id="tabEvent">
+    <div style="max-width:560px;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:20px;">Event Settings</h2>
+      <div class="card">
+        <div id="eventSaveMsg" class="hidden"></div>
+        <div class="form-row"><label>Event Date</label><input type="date" id="evDate"/></div>
+        <div class="form-row"><label>Event Kind</label><input type="text" id="evKind" placeholder="e.g. Sunday Service, Midweek, Convention"/></div>
+        <div class="form-row"><label>Event Session</label><input type="text" id="evSession" placeholder="e.g. First Service, Second Service, Morning"/></div>
+        <button class="btn btn-primary" onclick="saveEvent()">Save & Activate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN CONFIG TAB -->
+  <div class="page" id="tabAdmin">
+    <div style="max-width:560px;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:20px;">Admin Configuration</h2>
+      <div class="card">
+        <div class="card-title">Supabase Connection</div>
+        <div id="adminConfigMsg" class="hidden"></div>
+        <div class="form-row"><label>Supabase Project URL</label><input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co"/></div>
+        <div class="form-row"><label>Supabase Anon Key</label><input type="text" id="cfgKey" placeholder="eyJ..."/></div>
+        <button class="btn btn-primary" onclick="saveSupabaseConfig()">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE MODAL -->
+<div id="profileModal" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-title">Update Profile</div>
+    <div id="profileMsg" class="hidden"></div>
+    <div class="form-row"><label>Display Name</label><input type="text" id="profileName" placeholder="Your name"/></div>
+    <div class="form-row"><label>New Password (leave blank to keep)</label><input type="password" id="profilePassword" placeholder="New password"/></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="hideModal('profileModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProfile()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM CHECK-IN MODAL -->
+<div id="confirmModal" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-title">Confirm Check-In</div>
+    <div id="confirmBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="hideModal('confirmModal')">Cancel</button>
+      <button class="btn btn-success" id="confirmBtn" onclick="completeCheckin()">Confirm Check-In</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let SUPABASE_URL = localStorage.getItem('sb_url') || '';
+let SUPABASE_KEY = localStorage.getItem('sb_key') || '';
+let supabase = null;
+let currentAdmin = null;
+let currentEvent = JSON.parse(localStorage.getItem('currentEvent') || 'null');
+let pendingAttendee = null;
+let scanActive = false;
+let videoStream = null;
+let logData = [];
+let scanInterval = null;
+
+function initSupabase() {
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    return true;
+  }
+  return false;
+}
+initSupabase();
+
+window.addEventListener('DOMContentLoaded', () => {
+  updateLoginDbSection();
+});
+
+function updateLoginDbSection() {
+  const dbSection = document.getElementById('loginDbSection');
+  const dbStatus = document.getElementById('loginDbStatus');
+  const urlInput = document.getElementById('loginCfgUrl');
+  const keyInput = document.getElementById('loginCfgKey');
+  if (!dbSection) return;
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    dbStatus.style.color = 'var(--success)';
+    dbStatus.textContent = '\u2713 Connected to: ' + SUPABASE_URL.replace('https://','').split('.')[0] + '.supabase.co';
+    urlInput.value = SUPABASE_URL;
+    keyInput.value = SUPABASE_KEY;
+  } else {
+    dbStatus.style.color = 'var(--warning)';
+    dbStatus.textContent = 'Not connected \u2014 paste your credentials below';
+  }
+}
+
+function saveLoginSupabaseConfig() {
+  const url = document.getElementById('loginCfgUrl').value.trim();
+  const key = document.getElementById('loginCfgKey').value.trim();
+  const dbStatus = document.getElementById('loginDbStatus');
+  if (!url || !key) { dbStatus.style.color='var(--danger)'; dbStatus.textContent = 'Please fill in both fields.'; return; }
+  if (!url.startsWith('https://')) { dbStatus.style.color='var(--danger)'; dbStatus.textContent = 'URL must start with https://'; return; }
+  if (!key.startsWith('eyJ')) { dbStatus.style.color='var(--danger)'; dbStatus.textContent = 'Key looks wrong \u2014 should start with eyJ'; return; }
+  SUPABASE_URL = url; SUPABASE_KEY = key;
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  initSupabase();
+  updateLoginDbSection();
+  const cfgUrl = document.getElementById('cfgUrl');
+  const cfgKey = document.getElementById('cfgKey');
+  if (cfgUrl) cfgUrl.value = url;
+  if (cfgKey) cfgKey.value = key;
+}
+
+function clearSupabaseConfig() {
+  if (!confirm('This will clear your saved Supabase URL and key. You will need to re-enter them to connect again. Continue?')) return;
+  localStorage.removeItem('sb_url');
+  localStorage.removeItem('sb_key');
+  SUPABASE_URL = ''; SUPABASE_KEY = ''; supabase = null;
+  document.getElementById('loginError').classList.add('hidden');
+  document.getElementById('loginCfgUrl').value = '';
+  document.getElementById('loginCfgKey').value = '';
+  updateLoginDbSection();
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtnText');
+
+  // Clear any previous error
+  document.getElementById('loginError').classList.add('hidden');
+
+  if (!email || !pw) { showLoginError('Please enter your email and password.'); return; }
+
+  if (!supabase) {
+    // No Supabase configured yet — enter demo mode
+    currentAdmin = { email: email, user_metadata: { display_name: email.split('@')[0] } };
+    showApp(); return;
+  }
+
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
+    btn.textContent = 'Sign in';
+    if (error) { showLoginError(error.message); return; }
+    if (!data?.user) { showLoginError('Sign-in failed. Please try again.'); return; }
+    currentAdmin = data.user;
+    showApp();
+  } catch (err) {
+    btn.textContent = 'Sign in';
+    showLoginError('Connection error. Check your Supabase URL and key in Admin Config, or clear them to use demo mode.');
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg; el.classList.remove('hidden');
+}
+
+async function doLogout() {
+  if (supabase) await supabase.auth.signOut();
+  currentAdmin = null; stopCamera();
+  document.getElementById('mainApp').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+}
+
+function showApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  const name = currentAdmin?.user_metadata?.display_name || currentAdmin?.email || 'Admin';
+  document.getElementById('navAdminName').textContent = name;
+  document.getElementById('profileName').value = name;
+  if (SUPABASE_URL) document.getElementById('cfgUrl').value = SUPABASE_URL;
+  if (SUPABASE_KEY) document.getElementById('cfgKey').value = SUPABASE_KEY;
+  updateEventBanner(); loadDashboard();
+}
+
+function saveEvent() {
+  const d = document.getElementById('evDate').value;
+  const k = document.getElementById('evKind').value.trim();
+  const s = document.getElementById('evSession').value.trim();
+  if (!d || !k || !s) { showMsg('eventSaveMsg', 'Please fill in all fields.', 'error'); return; }
+  currentEvent = { date: d, kind: k, session: s };
+  localStorage.setItem('currentEvent', JSON.stringify(currentEvent));
+  updateEventBanner();
+  showMsg('eventSaveMsg', 'Event activated successfully.', 'success');
+  loadDashboard();
+}
+
+function updateEventBanner() {
+  if (currentEvent) {
+    document.getElementById('eventBanner').classList.remove('hidden');
+    document.getElementById('eventWarningBanner').classList.add('hidden');
+    document.getElementById('bannerEventKind').textContent = currentEvent.kind;
+    document.getElementById('bannerEventDate').textContent = currentEvent.date;
+    document.getElementById('bannerSession').textContent = currentEvent.session;
+    document.getElementById('navEventLabel').textContent = currentEvent.kind + ' · ' + currentEvent.date;
+    if (currentEvent.date) document.getElementById('evDate').value = currentEvent.date;
+    if (currentEvent.kind) document.getElementById('evKind').value = currentEvent.kind;
+    if (currentEvent.session) document.getElementById('evSession').value = currentEvent.session;
+  } else {
+    document.getElementById('eventBanner').classList.add('hidden');
+    document.getElementById('eventWarningBanner').classList.remove('hidden');
+  }
+}
+
+function saveSupabaseConfig() {
+  SUPABASE_URL = document.getElementById('cfgUrl').value.trim();
+  SUPABASE_KEY = document.getElementById('cfgKey').value.trim();
+  localStorage.setItem('sb_url', SUPABASE_URL);
+  localStorage.setItem('sb_key', SUPABASE_KEY);
+  const ok = initSupabase();
+  showMsg('adminConfigMsg', ok ? 'Connected successfully!' : 'Invalid config.', ok ? 'success' : 'error');
+}
+
+async function lookupHandle(handle) {
+  if (!handle) return;
+  handle = handle.replace(/^@/, '').trim().toLowerCase();
+  if (!currentEvent) { alert('Please set an event first in Event Settings.'); return; }
+  showCheckinResult('<p class="text-muted">Looking up...</p>');
+  if (!supabase) { demoPerson(handle); return; }
+  const { data: person, error } = await supabase.from('approved_attendees').select('*').ilike('kingschat', handle).maybeSingle();
+  if (error) { showCheckinResult(`<div class="result-card not-found"><div class="result-name">Error</div><p>${error.message}</p></div>`); return; }
+  if (!person) {
+    logEntry(handle, null, null, null, 'not_found');
+    showCheckinResult(`<div class="result-card not-found"><div class="result-status status-not-found">Not Found</div><div class="result-name mt-2">@${handle}</div><p class="result-meta">Not on the approved list.</p></div>`);
+    return;
+  }
+  const isDup = await checkDuplicate(person.kingschat);
+  if (isDup) {
+    logEntry(person.kingschat, person.full_name, person.phone_number, person.senior_cell, 'duplicate');
+    showCheckinResult(`<div class="result-card duplicate"><div class="result-status status-duplicate">Already Checked In</div><div class="result-name mt-2">${person.full_name}</div><p class="result-meta">@${person.kingschat} · ${person.senior_cell||'—'}</p><p style="font-size:13px;color:var(--warning);margin-top:4px;">Already checked in for this session.</p></div>`);
+    return;
+  }
+  pendingAttendee = person;
+  showCheckinResult(`<div class="result-card allowed"><div class="result-status status-allowed">Allowed</div><div class="result-name mt-2">${person.full_name}</div><p class="result-meta">@${person.kingschat} · ${person.phone_number||'—'} · ${person.senior_cell||'—'}</p><button class="btn btn-success mt-3" onclick="openConfirm()">Complete Check-In</button></div>`);
+}
+
+async function checkDuplicate(kingschat) {
+  if (!currentEvent || !supabase) return false;
+  const { data } = await supabase.from('attendance_log').select('id').ilike('kingschat_handle', kingschat).eq('event_date', currentEvent.date).ilike('event_kind', currentEvent.kind).ilike('event_session', currentEvent.session).eq('check_in_result', 'success').maybeSingle();
+  return !!data;
+}
+
+function openConfirm() {
+  if (!pendingAttendee) return;
+  document.getElementById('confirmBody').innerHTML = `
+    <p style="margin-bottom:12px;color:var(--text2);">Confirm check-in for:</p>
+    <div style="background:var(--bg3);border-radius:var(--radius);padding:16px 18px;border:1px solid var(--border);">
+      <div style="font-weight:700;font-size:16px;">${pendingAttendee.full_name}</div>
+      <div class="text-muted mt-2">@${pendingAttendee.kingschat} · ${pendingAttendee.phone_number||'—'}</div>
+      <div class="text-muted">Cell: ${pendingAttendee.senior_cell||'—'}</div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);">${currentEvent.kind} · ${currentEvent.date} · ${currentEvent.session}</div>
+    </div>`;
+  showModal('confirmModal');
+}
+
+async function completeCheckin() {
+  if (!pendingAttendee) return;
+  if (!supabase) {
+    hideModal('confirmModal');
+    showCheckinResult(`<div class="result-card allowed"><div class="result-status status-allowed">Checked In (Demo)</div><div class="result-name mt-2">${pendingAttendee.full_name}</div><p class="result-meta">Demo mode — not saved to database.</p></div>`);
+    pendingAttendee = null; return;
+  }
+  const adminName = currentAdmin?.user_metadata?.display_name || currentAdmin?.email || 'Unknown';
+  await logEntry(pendingAttendee.kingschat, pendingAttendee.full_name, pendingAttendee.phone_number, pendingAttendee.senior_cell, 'success', adminName);
+  hideModal('confirmModal');
+  showCheckinResult(`<div class="result-card allowed"><div class="result-status status-allowed">Checked In</div><div class="result-name mt-2">${pendingAttendee.full_name}</div><p class="result-meta">Logged at ${new Date().toLocaleTimeString()}</p></div>`);
+  pendingAttendee = null; loadDashboard();
+}
+
+async function logEntry(handle, name, phone, cell, result, adminName) {
+  if (!supabase) return;
+  await supabase.from('attendance_log').insert({ kingschat_handle: handle, full_name: name, phone_number: phone, senior_cell: cell, check_in_time: new Date().toISOString(), check_in_method: getActiveMethod(), admin_name: adminName || currentAdmin?.email || 'Unknown', event_date: currentEvent?.date, event_kind: currentEvent?.kind, event_session: currentEvent?.session, check_in_result: result });
+}
+
+function getActiveMethod() {
+  if (!document.getElementById('methodQR').classList.contains('hidden')) return 'qr_scan';
+  if (!document.getElementById('methodManual').classList.contains('hidden')) return 'manual_id';
+  return 'search';
+}
+
+async function doSearch() {
+  const name = document.getElementById('searchName').value.trim();
+  const handle = document.getElementById('searchHandle').value.replace('@','').trim();
+  const phone = document.getElementById('searchPhone').value.trim();
+  if (!name && !handle && !phone) return;
+  if (!supabase) { document.getElementById('searchResults').innerHTML = '<p class="text-muted">Demo mode — connect Supabase to search.</p>'; return; }
+  let q = supabase.from('approved_attendees').select('*');
+  if (handle) q = q.ilike('kingschat', `%${handle}%`);
+  else if (name) q = q.ilike('full_name', `%${name}%`);
+  else if (phone) q = q.ilike('phone_number', `%${phone}%`);
+  const { data, error } = await q.limit(10);
+  if (error || !data?.length) { document.getElementById('searchResults').innerHTML = '<p class="text-muted">No results found.</p>'; return; }
+  let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+  data.forEach(p => { html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg3);"><div><div style="font-weight:600;">${p.full_name}</div><div class="text-muted">@${p.kingschat} · ${p.phone_number||'—'}</div></div><button class="btn btn-primary btn-sm" onclick="lookupHandle('${p.kingschat}')">Select</button></div>`; });
+  html += '</div>';
+  document.getElementById('searchResults').innerHTML = html;
+}
+
+async function startCamera() {
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = document.getElementById('qrVideo');
+    video.srcObject = videoStream;
+    document.getElementById('startCamBtn').style.display = 'none';
+    document.getElementById('stopCamBtn').style.display = 'inline-flex';
+    document.getElementById('scanStatus').textContent = 'Scanning...';
+    scanActive = true;
+    scanInterval = setInterval(scanFrame, 300);
+  } catch(e) { document.getElementById('scanStatus').textContent = 'Camera error: ' + e.message; }
+}
+
+function stopCamera() {
+  scanActive = false;
+  if (scanInterval) clearInterval(scanInterval);
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+  document.getElementById('startCamBtn').style.display = 'inline-flex';
+  document.getElementById('stopCamBtn').style.display = 'none';
+  document.getElementById('scanStatus').textContent = 'Camera stopped.';
+}
+
+function scanFrame() {
+  if (!scanActive) return;
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'dontInvert' });
+  if (code) { document.getElementById('scanStatus').textContent = 'QR detected: ' + code.data; stopCamera(); lookupHandle(code.data); }
+}
+
+async function loadDashboard() {
+  if (!supabase || !currentEvent) { setStats('—','—','—','—','—'); return; }
+  const { count: total } = await supabase.from('approved_attendees').select('*', { count: 'exact', head: true });
+  const { count: checkedIn } = await supabase.from('attendance_log').select('*', { count: 'exact', head: true }).eq('event_date', currentEvent.date).eq('event_kind', currentEvent.kind).eq('event_session', currentEvent.session).eq('check_in_result', 'success');
+  const { count: rejected } = await supabase.from('attendance_log').select('*', { count: 'exact', head: true }).eq('event_date', currentEvent.date).eq('event_kind', currentEvent.kind).eq('event_session', currentEvent.session).eq('check_in_result', 'not_found');
+  const { count: dups } = await supabase.from('attendance_log').select('*', { count: 'exact', head: true }).eq('event_date', currentEvent.date).eq('event_kind', currentEvent.kind).eq('event_session', currentEvent.session).eq('check_in_result', 'duplicate');
+  setStats(total||0, checkedIn||0, (total||0)-(checkedIn||0), rejected||0, dups||0);
+  const { data: recent } = await supabase.from('attendance_log').select('*').eq('event_date', currentEvent.date).eq('event_kind', currentEvent.kind).eq('check_in_result', 'success').order('check_in_time', { ascending: false }).limit(8);
+  const tbody = document.getElementById('recentTable');
+  if (!recent?.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px;">No check-ins yet</td></tr>'; return; }
+  tbody.innerHTML = recent.map(r => `<tr><td style="color:var(--text);">${r.full_name||'—'}</td><td>@${r.kingschat_handle||'—'}</td><td>${r.senior_cell||'—'}</td><td>${r.check_in_time ? new Date(r.check_in_time).toLocaleTimeString() : '—'}</td><td>${r.check_in_method||'—'}</td><td>${r.admin_name||'—'}</td></tr>`).join('');
+}
+
+function setStats(total, checkedIn, remaining, rejected, dups) {
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statCheckedIn').textContent = checkedIn;
+  document.getElementById('statRemaining').textContent = remaining;
+  document.getElementById('statRejected').textContent = rejected;
+  document.getElementById('statDuplicates').textContent = dups;
+}
+
+async function loadLog() {
+  if (!supabase) { document.getElementById('logTable').innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:24px;">Connect Supabase first</td></tr>'; return; }
+  const { data } = await supabase.from('attendance_log').select('*').order('check_in_time', { ascending: false }).limit(500);
+  logData = data || []; renderLog(logData);
+}
+
+function renderLog(rows) {
+  const tbody = document.getElementById('logTable');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:24px;">No records</td></tr>'; return; }
+  const rb = r => ({ success: 'badge-success', duplicate: 'badge-warning', not_found: 'badge-danger' }[r] || 'badge-info');
+  tbody.innerHTML = rows.map(r => `<tr><td style="color:var(--text);">${r.full_name||'—'}</td><td>@${r.kingschat_handle||'—'}</td><td>${r.phone_number||'—'}</td><td>${r.senior_cell||'—'}</td><td>${r.check_in_time ? new Date(r.check_in_time).toLocaleString() : '—'}</td><td>${r.check_in_method||'—'}</td><td>${r.admin_name||'—'}</td><td>${r.event_kind||'—'}</td><td>${r.event_session||'—'}</td><td><span class="badge ${rb(r.check_in_result)}">${r.check_in_result||'—'}</span></td></tr>`).join('');
+}
+
+function filterLog() {
+  const q = document.getElementById('logSearch').value.toLowerCase();
+  const res = document.getElementById('logResultFilter').value;
+  let rows = logData;
+  if (q) rows = rows.filter(r => (r.full_name||'').toLowerCase().includes(q)||(r.kingschat_handle||'').toLowerCase().includes(q)||(r.senior_cell||'').toLowerCase().includes(q));
+  if (res) rows = rows.filter(r => r.check_in_result === res);
+  renderLog(rows);
+}
+
+function exportCSV() {
+  if (!logData.length) { alert('No data to export.'); return; }
+  const headers = ['full_name','kingschat_handle','phone_number','senior_cell','check_in_time','check_in_method','admin_name','event_date','event_kind','event_session','check_in_result'];
+  const csv = [headers.join(','), ...logData.map(r => headers.map(h => `"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+  download('attendance_log.csv', 'text/csv', csv);
+}
+
+function exportExcel() {
+  if (!logData.length) { alert('No data to export.'); return; }
+  const ws = XLSX.utils.json_to_sheet(logData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+  XLSX.writeFile(wb, 'attendance_log.xlsx');
+}
+
+function exportPDF() {
+  if (!logData.length) { alert('No data to export.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  doc.setFontSize(14); doc.text('Attendance Log', 14, 16);
+  doc.setFontSize(9);
+  const headers = ['Name','KingsChat','Phone','Cell','Time','Method','Admin','Result'];
+  const rows = logData.map(r => [r.full_name||'','@'+(r.kingschat_handle||''),r.phone_number||'',r.senior_cell||'',r.check_in_time ? new Date(r.check_in_time).toLocaleString() : '',r.check_in_method||'',r.admin_name||'',r.check_in_result||'']);
+  let y = 24;
+  doc.setFont(undefined,'bold');
+  headers.forEach((h,i) => doc.text(h, 14+i*36, y));
+  doc.setFont(undefined,'normal');
+  rows.forEach(row => { y += 7; if (y > 190) { doc.addPage(); y = 20; } row.forEach((c,i) => doc.text(String(c).substring(0,16), 14+i*36, y)); });
+  doc.save('attendance_log.pdf');
+}
+
+function download(filename, mime, content) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], { type: mime })); a.download = filename; a.click();
+}
+
+async function saveProfile() {
+  const name = document.getElementById('profileName').value.trim();
+  const pw = document.getElementById('profilePassword').value;
+  if (!supabase) { showMsg('profileMsg', 'Demo mode.', 'success'); return; }
+  const updates = {};
+  if (name) updates.data = { display_name: name };
+  if (pw) updates.password = pw;
+  const { error } = await supabase.auth.updateUser(updates);
+  if (error) { showMsg('profileMsg', error.message, 'error'); return; }
+  document.getElementById('navAdminName').textContent = name;
+  showMsg('profileMsg', 'Profile updated.', 'success');
+}
+
+function demoPerson(handle) {
+  const demos = { 'johnsmith': { kingschat: 'johnsmith', full_name: 'John Smith', phone_number: '07700900123', email: 'john@demo.com', senior_cell: 'Alpha Cell' }, 'janedoe': { kingschat: 'janedoe', full_name: 'Jane Doe', phone_number: '07700900456', email: 'jane@demo.com', senior_cell: 'Beta Cell' } };
+  const person = demos[handle.toLowerCase()];
+  if (!person) { showCheckinResult(`<div class="result-card not-found"><div class="result-status status-not-found">Not Found</div><div class="result-name mt-2">@${handle}</div><p class="result-meta">Not on the approved list (demo mode).</p></div>`); }
+  else { pendingAttendee = person; showCheckinResult(`<div class="result-card allowed"><div class="result-status status-allowed">Allowed</div><div class="result-name mt-2">${person.full_name}</div><p class="result-meta">@${person.kingschat} · ${person.phone_number} · ${person.senior_cell}</p><button class="btn btn-success mt-3" onclick="openConfirm()">Complete Check-In</button></div>`); }
+}
+
+function showTab(tabId, btnId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  document.getElementById(btnId).classList.add('active');
+  if (tabId === 'tabDashboard') loadDashboard();
+  if (tabId === 'tabLog') loadLog();
+}
+
+function switchMethod(method, el) {
+  document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['QR','Manual','Search'].forEach(m => document.getElementById('method'+m).classList.add('hidden'));
+  document.getElementById('method' + method.charAt(0).toUpperCase() + method.slice(1)).classList.remove('hidden');
+  document.getElementById('checkinResult').classList.add('hidden');
+  stopCamera();
+}
+
+function showCheckinResult(html) { const el = document.getElementById('checkinResult'); el.innerHTML = html; el.classList.remove('hidden'); }
+function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function hideModal(id) { document.getElementById(id).classList.add('hidden'); }
+function showMsg(id, msg, type) {
+  const el = document.getElementById(id);
+  el.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
+  el.textContent = msg; el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+document.querySelectorAll('.modal-bg').forEach(bg => { bg.addEventListener('click', e => { if (e.target === bg) bg.classList.add('hidden'); }); });
+</script>
+</body>
+</html>
